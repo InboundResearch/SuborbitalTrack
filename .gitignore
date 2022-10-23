@@ -1,0 +1,9 @@
+# MacOS drops these files all over the place.
+.DS_Store
+
+# I use Intellij IDEA for most of my editing.
+.idea
+*.iml
+
+# build directories
+target
