@@ -1,0 +1,46 @@
+* {
+    border:             none;
+    margin:             0;
+    padding:            0;
+    box-sizing:         border-box;
+    overflow:           hidden;
+}
+
+html {
+    width:              100%;
+    height:             100%;
+}
+
+body {
+    background-color:   #112244;
+    height:             100%;
+    margin:             auto;
+    width:              80%;
+    max-width:          1282px;
+    overflow:           hidden;
+    font-family:        sans-serif;
+    color:              white;
+    touch-action:       none;
+}
+
+#render-container {
+    width:              100%;
+    border:             solid 1px white;
+}
+
+#render-canvas-div {
+    width:              100%;
+    aspect-ratio:       2;
+}
+
+canvas {
+    background-color:   #ff0000;
+}
+
+div#title {
+    margin:         10px 0 10px 0;
+}
+
+div#footer {
+    margin-top:         5px;
+}

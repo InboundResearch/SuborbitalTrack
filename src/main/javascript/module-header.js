@@ -1,4 +1,4 @@
-export let SuborbitalTrack = function (mainCanvasDivId, fpsDivId, loadingDivId, onReadyCallback = function (suborbitalTrack) {}) {
+export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = function (suborbitalTrack) {}) {
     let $ = OBJ;
     let wgl = $.wgl = WebGL2();
     let ClassBase = wgl.ClassBase;
@@ -16,4 +16,3 @@ export let SuborbitalTrack = function (mainCanvasDivId, fpsDivId, loadingDivId, 
     let Shape = wgl.Shape;
     let Node = wgl.Node;
     let Thing = wgl.Thing;
-

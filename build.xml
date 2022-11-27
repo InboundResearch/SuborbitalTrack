@@ -33,6 +33,7 @@
         <concat destfile="${target-dir}/${concat-target}">
             <!-- file order is important -->
             <fileset dir="${source-dir}" includes="macros.js"/>
+            <!-- <fileset dir="${source-dir}" includes="enum.js"/> -->
             <fileset dir="${source-dir}" includes="import.js"/>
             <fileset dir="${source-dir}" includes="module-header.js"/>
             <fileset dir="${source-dir}" includes="module-footer.js"/>
