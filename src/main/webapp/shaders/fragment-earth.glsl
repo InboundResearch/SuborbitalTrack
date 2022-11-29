@@ -4,15 +4,10 @@ precision highp float;
 
 uniform float outputAlpha;
 
-uniform vec3 lightDirection;
-uniform vec3 cameraPosition;
-
 uniform sampler2D dayTxSampler;
 uniform sampler2D nightTxSampler;
-uniform sampler2D specularMapTxSampler;
 
-uniform vec4 sunPosition;
-uniform vec4 moonPosition;
+uniform vec2 sunRaDec;
 
 in vec3 model;
 in vec3 normal;
@@ -40,34 +35,6 @@ float mystep (const float edge0, const float edge1, const float x) {
     return (y < INFLECTION_PT) ? (hermite (INFLECTION_PT) * y / INFLECTION_PT) : hermite(y);
 }
 
-float sunVisible (const in vec4 moonPosition, const in vec4 sunPosition) {
-    // compute an estimate of the visibility of the sun as a function of the moon as a blocker
-
-    // the positions are reported in 4d space as a 3d location , with the 4th dimension as the
-    // radius, start by projecting them for the current fragment
-
-    vec3 sunDelta = v3 (sunPosition) - model;
-    float sunDeltaLength = length (sunDelta);
-    vec3 A = v3 (moonPosition);
-    vec3 moonDelta = A - model;
-    float moonDeltaLength = length (moonDelta);
-    float projectionRatio = moonDeltaLength / sunDeltaLength;
-    vec3 B = model + (sunDelta * projectionRatio);
-
-    // compute the delta and radius values that we'll need
-    float d = length (B - A);
-    float rA = moonPosition.w;
-    float rB = sunPosition.w * projectionRatio;
-
-    // we'll need the areas of the two circles
-    float aArea = rA * rA * PI;
-    float bArea = rB * rB * PI;
-
-    // compute my approximation to the intersection of two circles
-    float baseline = max (0.0, (bArea - aArea) / bArea);
-    return baseline + (mystep(abs (rA - rB), rA + rB, d) * (1.0 - baseline));
-}
-
 vec3 multiplyColors (const in vec3 left, const in vec3 right) {
     vec3 result = vec3 (left.r * right.r, left.g * right.g, left.b * right.b);
     return result;
@@ -83,48 +50,58 @@ vec3 smoothmix (const in vec3 a, const in vec3 b, const in float t) {
     return mix (a, b, smoothstep (0.0, 1.0, t));
 }
 
+vec3 raDecToVec3(const in vec2 raDec) {
+    float ra = raDec.x;  // 𝜃 theta
+    float dec = raDec.y; // 𝜙 phi
+
+    //return vec3(cos(ra), sin(ra), 0);
+
+    float cosDec = cos(dec);
+    return vec3 (cos(ra) * cosDec, sin(ra) * cosDec, sin(dec));
+}
+
+vec3 colorRedBlue(const in float value) {
+    return vec3(max(value, 0.0), 0, max(-value, 0.0));
+}
+
 void main(void) {
-    // compute the core vectors we'll need
-	vec3 viewVector = normalize (cameraPosition - model);
-    vec3 normalVector = normalize (normal);
+    // convert the uv to right ascension and declination, (0, 0) top left, (1, 1) bottom right,
+    // then to a ground normal vector
+    vec2 groundRaDec = (uv - vec2(0.5, 0.5)) * vec2 (2.0, -1.0) * PI;
+    vec3 groundNormal = raDecToVec3(groundRaDec);
 
-    // standard cosines we'll need
-	float cosLightNormalAngle = dot(normalVector, lightDirection);
-	float cosViewNormalAngle = dot(normalVector, viewVector);
+    // convert the sun position to a vector
+    vec3 sun = raDecToVec3(sunRaDec);
 
-    // the mapping from day to night
-    float sunVisibility = sunVisible (moonPosition, sunPosition);
-    float daytimeScale = clamp((cosLightNormalAngle + 0.2) * 2.5, 0.0, 1.0);
-    daytimeScale *= daytimeScale;
+    // compute the cosine of the angle between the ground and the sun
+    float sunVisibility = max(pow(1.0 - dot(sun, groundNormal), 1.0e1), 0.0);
 
     // get the texture map day color. The maps we are using (from Blue Marble at
     // http://visibleearth.nasa.gov/view_cat.php?categoryID=1484&p=1) are very saturated, so we
     // screen in a bit of a hazy blue based on images from EPIC (http://epic.gsfc.nasa.gov/)
     vec3 dayTxColor = texture(dayTxSampler, uv).rgb;
-    //vec3 hazyBlue = vec3(0.04, 0.07, 0.12);
-    //vec3 hazyBlue = vec3(0.07, 0.10, 0.25);
-    vec3 hazyBlue = vec3(0.06, 0.09, 0.18);
-    dayTxColor = screenColor (dayTxColor, hazyBlue) * sunVisibility;
+    vec3 hazyBlue = vec3(0.1, 0.15, 0.3);
+    dayTxColor = screenColor (dayTxColor, hazyBlue);
 
     // get the texture map night color, scaled to black as the view angle fades away
     vec3 nightTxColor = texture(nightTxSampler, uv).rgb;
-    nightTxColor = nightTxColor * cosViewNormalAngle;
 
     // the two colors are blended by the daytime scale
-    vec3 groundColor = smoothmix (nightTxColor, dayTxColor, sqrt (daytimeScale));
+    vec3 groundColor = smoothmix (dayTxColor, nightTxColor, sunVisibility);
 
-    // compute the specular contribution
-    float specularExp = 8.0;
-    vec3 reflection = reflect(-lightDirection, normalVector);
-    float specularMultiplier = clamp(dot(reflection, viewVector), 0.0, 1.0);
-    float specularMapTxValue = texture(specularMapTxSampler, uv).r;
-    vec3 specularColor = vec3(1.0, 0.9, 0.8) * (pow(specularMultiplier, specularExp) * 0.3 * specularMapTxValue * sunVisibility);
+    groundColor = screenColor (groundColor, vec3(0.1, 0.1, 0.1));
 
-    vec3 finalColor = clamp (groundColor + specularColor, 0.0, 1.0);
+    //groundColor = colorRedBlue(groundNormal.z);
+    //groundColor = colorRedBlue(groundRaDec.y / (PI / 2.0));
+    //groundColor = colorRedBlue(sunVisibility);
 
-    fragmentColor = vec4 (finalColor, outputAlpha);
+    // add a grid I want a little spike function on the grid boundaries
+    // a sin function that repeats on the boundaries is: sin((x*2 * pi) + (pi/2))
+    float gridScale = 18.0;
+    float lineScale = 1.0e3;
+    float gX = pow((sin((uv.x * gridScale * 2.0 * PI) + (PI / 2.0)) + 1.0) / 2.0, lineScale);
+    float gY = pow((sin((uv.y * 0.5 * gridScale * 2.0 * PI) + (PI / 2.0)) + 1.0) / 2.0, lineScale);
+    groundColor = smoothmix (groundColor, vec3(1.0, 1.0, 0.0), max (gX, gY) * 0.4);
+
+    fragmentColor = vec4 (groundColor, outputAlpha);
 }
-
-// blue marble image 43, 61, 71 (24, 34, 85)
-// mine (hb) 32, 52, 38
-// mine, uncorrected 22, 36, 8 (2, 5, 20)

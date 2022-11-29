@@ -16,3 +16,5 @@ export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = functi
     let Shape = wgl.Shape;
     let Node = wgl.Node;
     let Thing = wgl.Thing;
+
+    //LogLevel.set (LogLevel.TRACE);

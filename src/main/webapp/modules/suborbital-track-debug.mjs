@@ -21,6 +21,49 @@ export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = functi
     let Shape = wgl.Shape;
     let Node = wgl.Node;
     let Thing = wgl.Thing;
+    //LogLevel.set (LogLevel.TRACE);
+/*
+I am using a geocentric/celestial J2000 coordinate frame with the Earth at the origin.
+Stars and other elements referring to celestial J2000 RA/Dec ar to be plotted directly on the sky
+sphere at the coordinates given
+ */
+const DAYS_PER_JULIAN_CENTURY = 36525.0;
+let sol = Object.create (null);
+let computeJ2000 = function (date) {
+    let hours = date.getUTCHours ();
+    let minutes = date.getUTCMinutes ();
+    let seconds = date.getUTCSeconds ();
+    let milliseconds = date.getUTCMilliseconds ();
+    let h = hours + (minutes / 60) + (seconds / (60 * 60)) + (milliseconds / (1000 * 60 * 60));
+    let m = date.getUTCMonth () + 1;
+    let d = date.getUTCDate ();
+    let y = date.getUTCFullYear ();
+    let f = Math.floor;
+    return 367 * y - f (7 * (y + f ((m + 9) / 12)) / 4) + f (275 * m / 9) + d - 730531.5 + (h / 24);
+};
+// adapted from Astro.js and updated equations found in: https://gml.noaa.gov/grad/solcalc/NOAA_Solar_Calculations_day.xls
+let updateSol = function (time) {
+    // cos and sin routines that work on degrees (unwraps intrinsically)
+    let cos = Utility.cos;
+    let sin = Utility.sin;
+    // compute the julian century, time is already a J2000 date
+    let julianCentury = time / DAYS_PER_JULIAN_CENTURY;
+    // compute the mean longitude and mean anomaly of the sun (degrees)
+    let meanLongitude = (280.46646 + julianCentury * (36000.76983 + (julianCentury * 0.0003032))) % 360;
+    let meanAnomaly = 357.52911 + (julianCentury * (35999.05029 - (0.0001537 * julianCentury)));
+    // compute the ecliptic longitude of the sun (degrees)
+    let eclipticLongitude = meanLongitude +
+        (sin(meanAnomaly) * (1.914602 - (julianCentury * (0.004817 + (0.000014 * julianCentury))))) +
+        (sin(2 * meanAnomaly) * (0.019993 - (0.000101 * julianCentury))) +
+        (sin(3 * meanAnomaly) * 0.000289);
+    let apparentLongitude = eclipticLongitude - 0.00569 - (0.00478 * sin(125.04 - (1934.136 * julianCentury)));
+    let sinApparentLongitude = sin(apparentLongitude);
+    let meanObliqueEcliptic = 23 + (26 + ((21.448 - (julianCentury * (46.815 + (julianCentury * (0.00059 - (julianCentury * 0.001813))))))) / 60) / 60;
+    let correctedObliqueEcliptic = meanObliqueEcliptic + (0.00256 * cos(125.04 - (1934.136 * julianCentury)));
+    // compute the right ascension and declination
+    sol.ra = Math.atan2(cos(correctedObliqueEcliptic) * sinApparentLongitude, cos(apparentLongitude));
+    sol.dec = Math.asin(sin(correctedObliqueEcliptic) * sinApparentLongitude);
+};
     let render;
     let scene;
     let standardUniforms = Object.create (null);
@@ -52,27 +95,39 @@ export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = functi
             runFocus = false;
         }
     };
+    let originTime = performance.now ();
+    let originTimeOffset = Date.now () - originTime;
+    let timeFactor = 10;
+    let currentTime;
     let drawFrame = function (timestamp) {
         if (runFocus === true) {
+            let now = performance.now ();
             // draw again as fast as possible
-            window.requestAnimationFrame(drawFrame);
+            //window.requestAnimationFrame(drawFrame);
             if (document.hidden) {
                 return;
             }
-            Thing.updateAll(timestamp);
+            // set the clock to "now" in J2000 time, and update everything for that
+            let offsetTime = originTime + originTimeOffset + (timeFactor * (now - originTime));
+            // hack for utc offset
+            offsetTime += (1000 * 60 * 60 * 5);
+            let nowTime = new Date (offsetTime);
+            currentTime = computeJ2000 (nowTime);
+            Thing.updateAll (currentTime);
             // set up the view control matrices (just an othographic projection)
             let context = wgl.getContext();
-            standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.identity();
-            standardUniforms.PROJECTION_MATRIX_PARAMETER = Float4x4.orthographic (-1, 1, -1, 1, 0, 2);
-            standardUniforms.VIEW_MATRIX_PARAMETER = Float4x4.identity ();
-            standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.identity ();
+            standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.IDENTITY;
+            standardUniforms.PROJECTION_MATRIX_PARAMETER = Float4x4.orthographic (-1, 1, -0.5, 0.5, 0, 2);
+            standardUniforms.VIEW_MATRIX_PARAMETER = Float4x4.IDENTITY;
+            standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.IDENTITY;
             // draw the scene
             scene.traverse(standardUniforms);
         }
     };
     let buildScene = function () {
-        let context = wgl.getContext()
+        let context = wgl.getContext();
         scene = Node.new ({
+            transform: Float4x4.IDENTITY,
             state: function (standardUniforms) {
                 // ordinarily, webGl will automatically present and clear when we return control to the
                 // event loop from the draw function, but we overrode that to have explicit control.
@@ -98,29 +153,43 @@ export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = functi
                 standardUniforms.SPECULAR_CONTRIBUTION = 0.05;
                 standardUniforms.SPECULAR_EXPONENT = 8.0;
             }
-        }, "root")
-            .addChild (Node.new ({
-                transform: Float4x4.identity(),
-                //transform: Float4x4.translate([-3, 1.5, 0]),
-                state: function (standardUniforms) {
-                    Program.get ("basic-texture").use ();
-                    standardUniforms.TEXTURE_SAMPLER = "earth-day";
-                    standardUniforms.MODEL_COLOR = [1.0, 1.0, 1.0];
-                },
-                shape: "square",
-                children: false
-            }));
+        }, "root");
+        scene.addChild (Node.new ({
+            transform: Float4x4.scale ([1.0, 0.5, 1.0]),
+            state: function (standardUniforms) {
+                Program.get ("earth").use ()
+                    .setDayTxSampler ("earth-day")
+                    .setNightTxSampler ("earth-night")
+                    .setSunRaDec ([sol.ra, sol.dec])
+                ;
+                standardUniforms.MODEL_COLOR = [1.0, 1.0, 1.0];
+            },
+            shape: "square",
+            children: false
+        }));
+        Thing.new ({
+            node: "earth",
+            update: function (time) {
+                updateSol (time);
+            }
+        }, "earth");
         //LogLevel.set (LogLevel.TRACE);
         drawFrame ();
     };
-    // create the render object with my own texture...
+    // create the render object
     mainCanvasDiv = document.getElementById ("render-canvas-div");
     render = Render.new ({
         canvasDivId: "render-canvas-div",
         loaders: [
-            LoaderPath.new ({ type: Texture, path: "textures/@.png" }).addItems ("earth-day", { generateMipMap: true })
+            LoaderShader.new ("shaders/@.glsl")
+                .addFragmentShaders (["earth", "hardlight", "shadowed"]),
+            LoaderPath.new ({ type: Texture, path: "textures/@.png" })
+                .addItems (["earth-day", "earth-night"], { generateMipMap: true })
         ],
-        onReady: OnReady.new (null, buildScene)
+        onReady: OnReady.new (null, function (x) {
+            Program.new ({ vertexShader: "basic" }, "earth");
+            buildScene ();
+        })
     });
     return $;
 };

@@ -36,6 +36,7 @@
             <!-- <fileset dir="${source-dir}" includes="enum.js"/> -->
             <fileset dir="${source-dir}" includes="import.js"/>
             <fileset dir="${source-dir}" includes="module-header.js"/>
+            <fileset dir="${source-dir}" includes="sol.js"/>
             <fileset dir="${source-dir}" includes="module-footer.js"/>
         </concat>
     </target>
@@ -63,14 +64,7 @@
         <copy file="${target-dir}/${preprocess-target}" tofile="${site-dir}/${final-target}"/>
     </target>
 
-    <target name="js-document" depends="js-preprocess">
-        <exec executable="yuidoc">
-            <arg value="-c"/>
-            <arg value="yuidoc.json"/>
-        </exec>
-    </target>
-
-    <target name="js-minify" depends="js-document">
+    <target name="js-minify" depends="js-preprocess">
         <exec executable="uglifyjs">
             <arg value="${target-dir}/${preprocess-target}"/>
             <arg value="--mangle"/>

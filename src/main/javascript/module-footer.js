@@ -34,24 +34,39 @@
         }
     };
 
+    let originTime = performance.now ();
+    let originTimeOffset = Date.now () - originTime;
+    let timeFactor = 10;
+
+    let currentTime;
 
     let drawFrame = function (timestamp) {
         if (runFocus === true) {
+            let now = performance.now ();
             // draw again as fast as possible
-            window.requestAnimationFrame(drawFrame);
+            //window.requestAnimationFrame(drawFrame);
 
             if (document.hidden) {
                 return;
             }
-            Thing.updateAll(timestamp);
+
+            // set the clock to "now" in J2000 time, and update everything for that
+            let offsetTime = originTime + originTimeOffset + (timeFactor * (now - originTime));
+
+            // hack for utc offset
+            offsetTime += (1000 * 60 * 60 * 5);
+
+            let nowTime = new Date (offsetTime);
+            currentTime = computeJ2000 (nowTime);
+            Thing.updateAll (currentTime);
 
             // set up the view control matrices (just an othographic projection)
             let context = wgl.getContext();
-            standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.identity();
+            standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.IDENTITY;
 
-            standardUniforms.PROJECTION_MATRIX_PARAMETER = Float4x4.orthographic (-1, 1, -1, 1, 0, 2);
-            standardUniforms.VIEW_MATRIX_PARAMETER = Float4x4.identity ();
-            standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.identity ();
+            standardUniforms.PROJECTION_MATRIX_PARAMETER = Float4x4.orthographic (-1, 1, -0.5, 0.5, 0, 2);
+            standardUniforms.VIEW_MATRIX_PARAMETER = Float4x4.IDENTITY;
+            standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.IDENTITY;
 
             // draw the scene
             scene.traverse(standardUniforms);
@@ -59,8 +74,10 @@
     };
 
     let buildScene = function () {
-        let context = wgl.getContext()
+        let context = wgl.getContext();
+
         scene = Node.new ({
+            transform: Float4x4.IDENTITY,
             state: function (standardUniforms) {
                 // ordinarily, webGl will automatically present and clear when we return control to the
                 // event loop from the draw function, but we overrode that to have explicit control.
@@ -89,32 +106,47 @@
                 standardUniforms.SPECULAR_CONTRIBUTION = 0.05;
                 standardUniforms.SPECULAR_EXPONENT = 8.0;
             }
-        }, "root")
+        }, "root");
 
-            .addChild (Node.new ({
-                transform: Float4x4.identity(),
-                //transform: Float4x4.translate([-3, 1.5, 0]),
-                state: function (standardUniforms) {
-                    Program.get ("basic-texture").use ();
-                    standardUniforms.TEXTURE_SAMPLER = "earth-day";
-                    standardUniforms.MODEL_COLOR = [1.0, 1.0, 1.0];
-                },
-                shape: "square",
-                children: false
-            }));
+        scene.addChild (Node.new ({
+            transform: Float4x4.scale ([1.0, 0.5, 1.0]),
+            state: function (standardUniforms) {
+                Program.get ("earth").use ()
+                    .setDayTxSampler ("earth-day")
+                    .setNightTxSampler ("earth-night")
+                    .setSunRaDec ([sol.ra, sol.dec])
+                ;
+                standardUniforms.MODEL_COLOR = [1.0, 1.0, 1.0];
+            },
+            shape: "square",
+            children: false
+        }));
+
+        Thing.new ({
+            node: "earth",
+            update: function (time) {
+                updateSol (time);
+            }
+        }, "earth");
 
         //LogLevel.set (LogLevel.TRACE);
         drawFrame ();
     };
 
-    // create the render object with my own texture...
+    // create the render object
     mainCanvasDiv = document.getElementById ("render-canvas-div");
     render = Render.new ({
         canvasDivId: "render-canvas-div",
         loaders: [
-            LoaderPath.new ({ type: Texture, path: "textures/@.png" }).addItems ("earth-day", { generateMipMap: true })
+            LoaderShader.new ("shaders/@.glsl")
+                .addFragmentShaders (["earth", "hardlight", "shadowed"]),
+            LoaderPath.new ({ type: Texture, path: "textures/@.png" })
+                .addItems (["earth-day", "earth-night"], { generateMipMap: true })
         ],
-        onReady: OnReady.new (null, buildScene)
+        onReady: OnReady.new (null, function (x) {
+            Program.new ({ vertexShader: "basic" }, "earth");
+            buildScene ();
+        })
     });
 
     return $;
