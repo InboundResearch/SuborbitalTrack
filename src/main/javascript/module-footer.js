@@ -36,7 +36,7 @@
 
     let originTime = performance.now ();
     let originTimeOffset = Date.now () - originTime;
-    let timeFactor = 10;
+    let timeFactor = 1;//24 * 60; // one minute per full day
 
     let currentTime;
 
@@ -44,7 +44,7 @@
         if (runFocus === true) {
             let now = performance.now ();
             // draw again as fast as possible
-            //window.requestAnimationFrame(drawFrame);
+            window.requestAnimationFrame(drawFrame);
 
             if (document.hidden) {
                 return;
@@ -52,9 +52,6 @@
 
             // set the clock to "now" in J2000 time, and update everything for that
             let offsetTime = originTime + originTimeOffset + (timeFactor * (now - originTime));
-
-            // hack for utc offset
-            offsetTime += (1000 * 60 * 60 * 5);
 
             let nowTime = new Date (offsetTime);
             currentTime = computeJ2000 (nowTime);
@@ -111,7 +108,7 @@
         scene.addChild (Node.new ({
             transform: Float4x4.scale ([1.0, 0.5, 1.0]),
             state: function (standardUniforms) {
-                Program.get ("earth").use ()
+                Program.get ("suborbital-earth").use ()
                     .setDayTxSampler ("earth-day")
                     .setNightTxSampler ("earth-night")
                     .setSunRaDec ([sol.ra, sol.dec])
@@ -139,15 +136,48 @@
         canvasDivId: "render-canvas-div",
         loaders: [
             LoaderShader.new ("shaders/@.glsl")
-                .addFragmentShaders (["earth", "hardlight", "shadowed"]),
+                .addFragmentShaders (["suborbital-earth"]),
             LoaderPath.new ({ type: Texture, path: "textures/@.png" })
-                .addItems (["earth-day", "earth-night"], { generateMipMap: true })
+                .addItems (["earth-day", "earth-night"], { generateMipMap: true }),
+            LoaderPath.new ({ type: TextFile, path: "data/@.json" })
+                .addItems (["ground-stations"]),
+            Loader.new ()
+                // proxy to get around the CORS problem
+                .addItem (TextFile, "elements", { url: "https://bedrock.brettonw.com/api?event=fetch&url=https://www.celestrak.com/NORAD/elements/gp.php%3FGROUP%3Dactive%26FORMAT%3Dtle" })
         ],
         onReady: OnReady.new (null, function (x) {
-            Program.new ({ vertexShader: "basic" }, "earth");
+            Program.new ({ vertexShader: "basic" }, "suborbital-earth");
             buildScene ();
         })
     });
+
+    $.addPoint = function (ra, dec, size) {
+        /*
+        let worldNode = Node.get ("world");
+        worldNode.removeChild("point");
+
+        let pointNode = Node.new ({
+            transform: Float4x4.IDENTITY,
+            state: function (standardUniforms) {
+                Program.get ("earth").use ()
+                    .setDayTxSampler ("earth-day")
+                    .setNightTxSampler ("earth-night")
+                    .setSunRaDec ([sol.ra, sol.dec])
+                ;
+                standardUniforms.MODEL_COLOR = [1.0, 1.0, 1.0];
+            },
+            shape: "square",
+            children: false
+        })
+
+        worldNode.addChild (pointNode);
+        */
+    };
+
+    $.updateVis = function (idsToShow, timeToShow = Date.now()) {
+        LogLevel.info ("Update Vis called with " + idsToShow.length + " elements, at " + timeToShow.toString());
+    };
+
 
     return $;
 };

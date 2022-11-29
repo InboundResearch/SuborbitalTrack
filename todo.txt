@@ -1,0 +1,6 @@
+- import ground station descriptions
+- draw polygons on the ground track for ground stations
+- import TLEs for satellite renderings
+- draw a series of dots for a satellite
+- add time controls
+- debug the day/night display

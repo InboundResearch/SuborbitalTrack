@@ -1,8 +1,7 @@
 // class hierarchy
 // default values...
 // vector manipulation macros
-import "https://astro.irdev.us/modules/satellite.mjs";
-import {WebGL2, LogLevel, Utility, Float2, Float3, Float4x4} from "./webgl-debug.mjs";
+import {WebGL2, LogLevel, Utility, Float2, Float3, Float4x4} from "https://webgl.irdev.us/webgl-debug.mjs";
 export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = function (suborbitalTrack) {}) {
     let $ = Object.create (null);
     let wgl = $.wgl = WebGL2();
@@ -27,7 +26,6 @@ I am using a geocentric/celestial J2000 coordinate frame with the Earth at the o
 Stars and other elements referring to celestial J2000 RA/Dec ar to be plotted directly on the sky
 sphere at the coordinates given
  */
-const DAYS_PER_JULIAN_CENTURY = 36525.0;
 let sol = Object.create (null);
 let computeJ2000 = function (date) {
     let hours = date.getUTCHours ();
@@ -41,12 +39,18 @@ let computeJ2000 = function (date) {
     let f = Math.floor;
     return 367 * y - f (7 * (y + f ((m + 9) / 12)) / 4) + f (275 * m / 9) + d - 730531.5 + (h / 24);
 };
+let computeGmstFromJ2000 = function (jd) {
+    let jc = jd / 36525;
+    let gmst = 67310.54841 + (((876600 * 60 * 60) + 8640184.812866) * jc) + (0.093104 * jc * jc) - (6.2e-6 * jc * jc * jc);
+    return Utility.degreesToRadians (Utility.unwindDegrees (gmst / 240));
+};
 // adapted from Astro.js and updated equations found in: https://gml.noaa.gov/grad/solcalc/NOAA_Solar_Calculations_day.xls
 let updateSol = function (time) {
     // cos and sin routines that work on degrees (unwraps intrinsically)
     let cos = Utility.cos;
     let sin = Utility.sin;
     // compute the julian century, time is already a J2000 date
+    const DAYS_PER_JULIAN_CENTURY = 36525.0;
     let julianCentury = time / DAYS_PER_JULIAN_CENTURY;
     // compute the mean longitude and mean anomaly of the sun (degrees)
     let meanLongitude = (280.46646 + julianCentury * (36000.76983 + (julianCentury * 0.0003032))) % 360;
@@ -63,6 +67,9 @@ let updateSol = function (time) {
     // compute the right ascension and declination
     sol.ra = Math.atan2(cos(correctedObliqueEcliptic) * sinApparentLongitude, cos(apparentLongitude));
     sol.dec = Math.asin(sin(correctedObliqueEcliptic) * sinApparentLongitude);
+    // update the ra with the current time
+    let gmst = computeGmstFromJ2000 (time);
+    sol.ra = Utility.unwindRadians(sol.ra - gmst);
 };
     let render;
     let scene;
@@ -97,20 +104,18 @@ let updateSol = function (time) {
     };
     let originTime = performance.now ();
     let originTimeOffset = Date.now () - originTime;
-    let timeFactor = 10;
+    let timeFactor = 1;//24 * 60; // one minute per full day
     let currentTime;
     let drawFrame = function (timestamp) {
         if (runFocus === true) {
             let now = performance.now ();
             // draw again as fast as possible
-            //window.requestAnimationFrame(drawFrame);
+            window.requestAnimationFrame(drawFrame);
             if (document.hidden) {
                 return;
             }
             // set the clock to "now" in J2000 time, and update everything for that
             let offsetTime = originTime + originTimeOffset + (timeFactor * (now - originTime));
-            // hack for utc offset
-            offsetTime += (1000 * 60 * 60 * 5);
             let nowTime = new Date (offsetTime);
             currentTime = computeJ2000 (nowTime);
             Thing.updateAll (currentTime);
@@ -157,7 +162,7 @@ let updateSol = function (time) {
         scene.addChild (Node.new ({
             transform: Float4x4.scale ([1.0, 0.5, 1.0]),
             state: function (standardUniforms) {
-                Program.get ("earth").use ()
+                Program.get ("suborbital-earth").use ()
                     .setDayTxSampler ("earth-day")
                     .setNightTxSampler ("earth-night")
                     .setSunRaDec ([sol.ra, sol.dec])
@@ -182,15 +187,45 @@ let updateSol = function (time) {
         canvasDivId: "render-canvas-div",
         loaders: [
             LoaderShader.new ("shaders/@.glsl")
-                .addFragmentShaders (["earth", "hardlight", "shadowed"]),
+                .addFragmentShaders (["suborbital-earth"]),
             LoaderPath.new ({ type: Texture, path: "textures/@.png" })
-                .addItems (["earth-day", "earth-night"], { generateMipMap: true })
+                .addItems (["earth-day", "earth-night"], { generateMipMap: true }),
+            LoaderPath.new ({ type: TextFile, path: "data/@.json" })
+                .addItems (["ground-stations"]),
+            Loader.new ()
+                // proxy to get around the CORS problem
+                .addItem (TextFile, "elements", { url: "https://bedrock.brettonw.com/api?event=fetch&url=https://www.celestrak.com/NORAD/elements/gp.php%3FGROUP%3Dactive%26FORMAT%3Dtle" })
         ],
         onReady: OnReady.new (null, function (x) {
-            Program.new ({ vertexShader: "basic" }, "earth");
+            Program.new ({ vertexShader: "basic" }, "suborbital-earth");
             buildScene ();
         })
     });
+    $.addPoint = function (ra, dec, size) {
+        /*
+        let worldNode = Node.get ("world");
+        worldNode.removeChild("point");
+
+        let pointNode = Node.new ({
+            transform: Float4x4.IDENTITY,
+            state: function (standardUniforms) {
+                Program.get ("earth").use ()
+                    .setDayTxSampler ("earth-day")
+                    .setNightTxSampler ("earth-night")
+                    .setSunRaDec ([sol.ra, sol.dec])
+                ;
+                standardUniforms.MODEL_COLOR = [1.0, 1.0, 1.0];
+            },
+            shape: "square",
+            children: false
+        })
+
+        worldNode.addChild (pointNode);
+        */
+    };
+    $.updateVis = function (idsToShow, timeToShow = Date.now()) {
+        LogLevel.info ("Update Vis called with " + idsToShow.length + " elements, at " + timeToShow.toString());
+    };
     return $;
 };
 // test code would go here if needed

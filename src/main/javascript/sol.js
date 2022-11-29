@@ -4,8 +4,6 @@ Stars and other elements referring to celestial J2000 RA/Dec ar to be plotted di
 sphere at the coordinates given
  */
 
-const DAYS_PER_JULIAN_CENTURY = 36525.0;
-
 let sol = Object.create (null);
 
 let computeJ2000 = function (date) {
@@ -21,6 +19,12 @@ let computeJ2000 = function (date) {
     return 367 * y - f (7 * (y + f ((m + 9) / 12)) / 4) + f (275 * m / 9) + d - 730531.5 + (h / 24);
 };
 
+let computeGmstFromJ2000 = function (jd) {
+    let jc = jd / 36525;
+    let gmst = 67310.54841 + (((876600 * 60 * 60) + 8640184.812866) * jc) + (0.093104 * jc * jc) - (6.2e-6 * jc * jc * jc);
+    return Utility.degreesToRadians (Utility.unwindDegrees (gmst / 240));
+};
+
 // adapted from Astro.js and updated equations found in: https://gml.noaa.gov/grad/solcalc/NOAA_Solar_Calculations_day.xls
 let updateSol = function (time) {
     // cos and sin routines that work on degrees (unwraps intrinsically)
@@ -28,6 +32,7 @@ let updateSol = function (time) {
     let sin = Utility.sin;
 
     // compute the julian century, time is already a J2000 date
+    const DAYS_PER_JULIAN_CENTURY = 36525.0;
     let julianCentury = time / DAYS_PER_JULIAN_CENTURY;
 
     // compute the mean longitude and mean anomaly of the sun (degrees)
@@ -49,5 +54,8 @@ let updateSol = function (time) {
     sol.ra = Math.atan2(cos(correctedObliqueEcliptic) * sinApparentLongitude, cos(apparentLongitude));
     sol.dec = Math.asin(sin(correctedObliqueEcliptic) * sinApparentLongitude);
 
+    // update the ra with the current time
+    let gmst = computeGmstFromJ2000 (time);
+    sol.ra = Utility.unwindRadians(sol.ra - gmst);
 
 };

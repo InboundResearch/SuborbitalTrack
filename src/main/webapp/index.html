@@ -5,7 +5,7 @@
     <title>Suborbital Track</title>
     <meta http-equiv="content-type" content="text/html; charset=UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" href="img/tab-icon.png?v=2" />
+    <link rel="icon" type="image/png" href="img/icon.png?3"/>
     <link rel="stylesheet" href="index.css" />
 </head>
 <body><div id="title" style="text-align:left; font-size:24px;">Suborbital Track</div><div id="render-container"><div id="render-canvas-div"></div></div><div style="font-size:12px;height:34px; margin-top:2px;margin-bottom:2px;vertical-align:middle;">
@@ -14,14 +14,6 @@
     <a href="https://github.com/InboundResearch/SuborbitalTrack" style="float:right;font-size:14px;text-decoration:none;color:white;">... on GitHub</a>
 </div>
 </body>
-<script>
-    let addModule = function (module) {
-        let script = document.createElement ("script");
-        script.setAttribute("type", "module");
-        script.setAttribute ("src", "modules/" + module + "?" + Date.now ());
-        document.body.appendChild (script);
-    };
-    addModule("index.mjs");
-</script>
+<script type="module" src="modules/index.mjs"></script>
 
 </html>
