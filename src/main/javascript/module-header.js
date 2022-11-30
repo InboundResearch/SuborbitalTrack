@@ -13,6 +13,7 @@ export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = functi
     let Loader = wgl.Loader;
     let Program = wgl.Program;
     let makeBall = wgl.makeBall;
+    let makeFan = wgl.makeFan;
     let Shape = wgl.Shape;
     let Node = wgl.Node;
     let Thing = wgl.Thing;

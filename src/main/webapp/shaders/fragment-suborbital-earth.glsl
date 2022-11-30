@@ -55,7 +55,7 @@ void main(void) {
     vec3 sun = raDecToVec3(sunRaDec);
 
     // compute the cosine of the angle between the ground and the sun
-    float sunVisibility = max(pow(1.0 - dot(sun, groundNormal), 5.0), 0.0);
+    float sunVisibility = max(pow(1.0 - dot(sun, groundNormal), 1.0e1), 0.0);
 
     // get the texture map day color. The maps we are using (from Blue Marble at
     // http://visibleearth.nasa.gov/view_cat.php?categoryID=1484&p=1) are very saturated, so we

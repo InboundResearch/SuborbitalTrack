@@ -3,4 +3,4 @@
 - import TLEs for satellite renderings
 - draw a series of dots for a satellite
 - add time controls
-- debug the day/night display
+- figure out systemic time error in day/night display (ahead by a little it?)

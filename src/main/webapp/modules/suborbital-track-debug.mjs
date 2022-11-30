@@ -1,7 +1,7 @@
 // class hierarchy
 // default values...
 // vector manipulation macros
-import {WebGL2, LogLevel, Utility, Float2, Float3, Float4x4} from "https://webgl.irdev.us/webgl-debug.mjs";
+import {WebGL2, LogLevel, Utility, Float2, Float3, Float4x4} from "https://webgl.irdev.us/modules/webgl.mjs";
 export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = function (suborbitalTrack) {}) {
     let $ = Object.create (null);
     let wgl = $.wgl = WebGL2();
@@ -17,6 +17,7 @@ export let SuborbitalTrack = function (mainCanvasDivId, onReadyCallback = functi
     let Loader = wgl.Loader;
     let Program = wgl.Program;
     let makeBall = wgl.makeBall;
+    let makeFan = wgl.makeFan;
     let Shape = wgl.Shape;
     let Node = wgl.Node;
     let Thing = wgl.Thing;
@@ -104,7 +105,7 @@ let updateSol = function (time) {
     };
     let originTime = performance.now ();
     let originTimeOffset = Date.now () - originTime;
-    let timeFactor = 1;//24 * 60; // one minute per full day
+    let timeFactor = 1; //24 * 60 * 60; // one second per full day
     let currentTime;
     let drawFrame = function (timestamp) {
         if (runFocus === true) {
@@ -178,7 +179,24 @@ let updateSol = function (time) {
                 updateSol (time);
             }
         }, "earth");
-        //LogLevel.set (LogLevel.TRACE);
+        // get the ground stations and define the polygons around them
+        let groundStations = JSON.parse (TextFile.get ("ground-stations").text);
+        for (let groundStation of groundStations) {
+            if (groundStation.authority === "CSpOC") {
+                let pts = [[groundStation.longitude, groundStation.latitude]];
+                // make a fan around the first point
+                let count = 6;
+                let angle = (Math.PI * 2.0) / count;
+                let radius = groundStation.max_range
+                for (let i = 0; i < count; ++i) {
+                    let currentAngle = i * angle;
+                    pts.push (Float2.add (pts[0], Float2.scale ([Math.cos (currentAngle), Math.sin(currentAngle)], radius)));
+                }
+                pts.push (pts[0]);
+                let fanName = "fan-" + groundStation.id;
+                makeFan (fanName, pts);
+            }
+        }
         drawFrame ();
     };
     // create the render object

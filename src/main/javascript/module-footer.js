@@ -36,7 +36,7 @@
 
     let originTime = performance.now ();
     let originTimeOffset = Date.now () - originTime;
-    let timeFactor = 1;//24 * 60; // one minute per full day
+    let timeFactor = 1; //24 * 60 * 60; // one second per full day
 
     let currentTime;
 
@@ -126,7 +126,26 @@
             }
         }, "earth");
 
-        //LogLevel.set (LogLevel.TRACE);
+        // get the ground stations and define the polygons around them
+        let groundStations = JSON.parse (TextFile.get ("ground-stations").text);
+        for (let groundStation of groundStations) {
+            if (groundStation.authority === "CSpOC") {
+                let pts = [[groundStation.longitude, groundStation.latitude]];
+
+                // make a fan around the first point
+                let count = 6;
+                let angle = (Math.PI * 2.0) / count;
+                let radius = groundStation.max_range
+                for (let i = 0; i < count; ++i) {
+                    let currentAngle = i * angle;
+                    pts.push (Float2.add (pts[0], Float2.scale ([Math.cos (currentAngle), Math.sin(currentAngle)], radius)));
+                }
+                pts.push (pts[0]);
+                let fanName = "fan-" + groundStation.id;
+                makeFan (fanName, pts);
+            }
+        }
+
         drawFrame ();
     };
 
