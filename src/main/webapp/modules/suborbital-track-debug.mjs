@@ -144,8 +144,8 @@ let updateSol = function (time) {
                 // back face culling enabled, and full z-buffer utilization
                 context.enable (context.CULL_FACE);
                 context.cullFace (context.BACK);
-                context.enable (context.DEPTH_TEST);
-                context.depthMask (true);
+                //context.enable (context.DEPTH_TEST);
+                //context.depthMask (true);
                 // oh for &#^%'s sake, alpha blending should be standard
                 context.blendFunc (context.SRC_ALPHA, context.ONE_MINUS_SRC_ALPHA);
                 context.enable (context.BLEND);
@@ -162,6 +162,7 @@ let updateSol = function (time) {
         }, "root");
         scene.addChild (Node.new ({
             transform: Float4x4.scale ([1.0, 0.5, 1.0]),
+            enabled: true,
             state: function (standardUniforms) {
                 Program.get ("suborbital-earth").use ()
                     .setDayTxSampler ("earth-day")
@@ -183,18 +184,29 @@ let updateSol = function (time) {
         let groundStations = JSON.parse (TextFile.get ("ground-stations").text);
         for (let groundStation of groundStations) {
             if (groundStation.authority === "CSpOC") {
-                let pts = [[groundStation.longitude, groundStation.latitude]];
+                let pts = [];
+                let centerPt = [groundStation.longitude / 180.0, groundStation.latitude / 180.0];
                 // make a fan around the first point
-                let count = 6;
+                let count = 32;
                 let angle = (Math.PI * 2.0) / count;
-                let radius = groundStation.max_range
+                let radius = 0.02;
                 for (let i = 0; i < count; ++i) {
                     let currentAngle = i * angle;
-                    pts.push (Float2.add (pts[0], Float2.scale ([Math.cos (currentAngle), Math.sin(currentAngle)], radius)));
+                    pts.push (Float2.add (centerPt, Float2.scale ([Math.cos (currentAngle), Math.sin(currentAngle)], radius)));
+                    LogLevel.info ("Pt: " + i + ", currentAngle: " + currentAngle);
                 }
-                pts.push (pts[0]);
                 let fanName = "fan-" + groundStation.id;
                 makeFan (fanName, pts);
+                scene.addChild (Node.new ({
+                    transform: Float4x4.translate ([0.0, 0.0, -0.1]),
+                    state: function (standardUniforms) {
+                        Program.get ("basic").use ();
+                        standardUniforms.MODEL_COLOR = [1.0, 0.75, 0.5];
+                        standardUniforms.OUTPUT_ALPHA_PARAMETER = 0.25;
+                    },
+                    shape: fanName,
+                    children: false
+                }));
             }
         }
         drawFrame ();

@@ -40,7 +40,6 @@ vec3 raDecToVec3(const in vec2 raDec) {
     return vec3 (cos(ra) * cosDec, sin(ra) * cosDec, sin(dec));
 }
 
-
 vec3 debugRedBlue(const in float value) {
     return vec3(max(value, 0.0), 0.0, max(-value, 0.0));
 }
@@ -77,7 +76,7 @@ void main(void) {
     float gridScale = 18.0;
     float lineScale = 1.0e3;
     float gX = pow((sin((uv.x * gridScale * 2.0 * PI) + (PI / 2.0)) + 1.0) / 2.0, lineScale);
-    float gY = pow((sin((uv.y * 0.5 * gridScale * 2.0 * PI) + (PI / 2.0)) + 1.0) / 2.0, lineScale);
+    float gY = pow((sin((uv.y * 0.5 * gridScale * 2.0 * PI) + (3.0 * PI / 2.0)) + 1.0) / 2.0, lineScale);
     groundColor = smoothmix (groundColor, vec3(1.0, 0.66, 0.0), max (gX, gY) * 0.4);
 
     //groundColor = debugRedBlue(abs(groundRaDec.x - sunRaDec.x) / (2.0 * PI));
