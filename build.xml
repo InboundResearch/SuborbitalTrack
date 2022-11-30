@@ -37,6 +37,7 @@
             <fileset dir="${source-dir}" includes="import.js"/>
             <fileset dir="${source-dir}" includes="module-header.js"/>
             <fileset dir="${source-dir}" includes="sol.js"/>
+            <fileset dir="${source-dir}" includes="tle.js"/>
             <fileset dir="${source-dir}" includes="module-footer.js"/>
         </concat>
     </target>

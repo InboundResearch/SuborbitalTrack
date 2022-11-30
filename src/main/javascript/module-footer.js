@@ -57,6 +57,11 @@
             currentTime = computeJ2000 (nowTime);
             Thing.updateAll (currentTime);
 
+            // update the satellites - nowTime is a javascript Date
+            if (tle) {
+                tle.updateElements (nowTime, Node.get ("tle").instanceTransforms.matrices);
+            }
+
             // set up the view control matrices (just an othographic projection)
             let context = wgl.getContext();
             standardUniforms.MODEL_MATRIX_PARAMETER = Float4x4.IDENTITY;
@@ -72,6 +77,8 @@
 
     let buildScene = function () {
         let context = wgl.getContext();
+
+        makeBall ("ball-small", 8);
 
         scene = Node.new ({
             transform: Float4x4.IDENTITY,
@@ -131,16 +138,34 @@
         let groundStations = JSON.parse (TextFile.get ("ground-stations").text);
         for (let groundStation of groundStations) {
             if (groundStation.authority === "CSpOC") {
+            //if (1) {
                 let pts = [];
-                let centerPt = [groundStation.longitude / 180.0, groundStation.latitude / 180.0];
+                let centerLonLat = Float2.scale([groundStation.longitude, groundStation.latitude], Math.PI / 180.0);
 
-                // make a fan around the first point
+                // a little math to work out a range reference
+                const EARTH_RADIUS = 6378.1370;
+                const EARTH_CIRCUMFERENCE = Math.PI * 2.0 * EARTH_RADIUS;
+
+                // make a fan around the first point, adding 'radius' degrees lon/lat in a circle
                 let count = 32;
                 let angle = (Math.PI * 2.0) / count;
-                let radius = 0.02;
+                let range = Math.min (Math.max (groundStation.max_range, 1000), 6000);
+                let radius = range / EARTH_CIRCUMFERENCE;
                 for (let i = 0; i < count; ++i) {
                     let currentAngle = i * angle;
-                    pts.push (Float2.add (centerPt, Float2.scale ([Math.cos (currentAngle), Math.sin(currentAngle)], radius)));
+                    let v = Float2.scale([Math.cos (currentAngle), Math.sin(currentAngle)], radius);
+                    let pt = Float2.add (centerLonLat, v);
+                    pt[0] = centerLonLat[0] + ((pt[0] - centerLonLat[0]) / Math.cos (pt[1]));
+
+                    // XXX TODO
+                    if (pt[0] > Math.PI) {
+                        // this ground station needs to be mirrored to the left to show correctly
+                    } else if (pt[0] < -Math.PI) {
+                        // this ground station needs to be mirrored to the right to show correctly
+                    }
+                    // map the point back to screen space
+                    pt = Float2.scale (pt, 1 / Math.PI);
+                    pts.push (pt);
                     LogLevel.info ("Pt: " + i + ", currentAngle: " + currentAngle);
                 }
                 let fanName = "fan-" + groundStation.id;
@@ -149,18 +174,15 @@
                 scene.addChild (Node.new ({
                     transform: Float4x4.translate ([0.0, 0.0, -0.1]),
                     state: function (standardUniforms) {
-                        Program.get ("basic").use ();
-                        standardUniforms.MODEL_COLOR = [1.0, 0.75, 0.5];
-                        standardUniforms.OUTPUT_ALPHA_PARAMETER = 0.25;
+                        Program.get ("color").use ();
+                        standardUniforms.MODEL_COLOR = [0.5, 1.0, 0.0];
+                        standardUniforms.OUTPUT_ALPHA_PARAMETER = 0.1;
                     },
                     shape: fanName,
                     children: false
                 }));
-
             }
         }
-
-        drawFrame ();
     };
 
     // create the render object
@@ -176,41 +198,25 @@
                 .addItems (["ground-stations"]),
             Loader.new ()
                 // proxy to get around the CORS problem
-                .addItem (TextFile, "elements", { url: "https://bedrock.brettonw.com/api?event=fetch&url=https://www.celestrak.com/NORAD/elements/gp.php%3FGROUP%3Dactive%26FORMAT%3Dtle" })
+                //.addItem (TextFile, "elements", { url: "https://bedrock.brettonw.com/api?event=fetch&url=https://www.celestrak.com/NORAD/elements/gp.php%3FGROUP%3Dactive%26FORMAT%3Dtle" })
+                .addItem (TextFile, "elements", { url: "data/gp.tle" })
         ],
         onReady: OnReady.new (null, function (x) {
             Program.new ({ vertexShader: "basic" }, "suborbital-earth");
+
+            // set up the scene and go
             buildScene ();
+            //$.addTle (["ISS (NAUKA)", "39440"]);
+            onReadyCallback ($);
+            drawFrame ();
         })
     });
 
-    $.addPoint = function (ra, dec, size) {
-        /*
-        let worldNode = Node.get ("world");
-        worldNode.removeChild("point");
-
-        let pointNode = Node.new ({
-            transform: Float4x4.IDENTITY,
-            state: function (standardUniforms) {
-                Program.get ("earth").use ()
-                    .setDayTxSampler ("earth-day")
-                    .setNightTxSampler ("earth-night")
-                    .setSunRaDec ([sol.ra, sol.dec])
-                ;
-                standardUniforms.MODEL_COLOR = [1.0, 1.0, 1.0];
-            },
-            shape: "square",
-            children: false
-        })
-
-        worldNode.addChild (pointNode);
-        */
-    };
-
-    $.updateVis = function (idsToShow, timeToShow = Date.now()) {
+    $.updateVis = function (idsToShow, timeToShow) {
         LogLevel.info ("Update Vis called with " + idsToShow.length + " elements, at " + timeToShow.toString());
+        this.addTle (idsToShow);
+        // XXX set the time separately...
     };
-
 
     return $;
 };
